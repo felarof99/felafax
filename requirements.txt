@@ -14,6 +14,7 @@ optax
 # qax
 requests
 sentencepiece
+torch --index-url https://download.pytorch.org/whl/cpu
 tqdm
 transformers>=4.43
 # uvicorn
