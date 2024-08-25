@@ -1,6 +1,10 @@
 import jax
+import jax.numpy as jnp
 
 
+###################################################
+# Util functions for JAX RNG handling
+###################################################
 rng_generator = None
 
 def init_rng(seed):
@@ -32,7 +36,7 @@ class NextRNG(object):
             # Update the instance's RNG and return the new split RNG
             self.rng, split_rng = jax.random.split(self.rng)
             return split_rng
-        
+
         elif isinstance(keys, int):
             # If an integer is provided, split the RNG into that many new keys plus one
             split_rngs = jax.random.split(self.rng, num=keys + 1)
@@ -45,7 +49,7 @@ class NextRNG(object):
         else:
             # If a sequence of keys is provided, split the RNG into that many new keys plus one
             split_rngs = jax.random.split(self.rng, num=len(keys) + 1)
-            
+
             # Update the instance's RNG with the first split
             self.rng = split_rngs[0]
 
