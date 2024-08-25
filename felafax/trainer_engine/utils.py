@@ -1,5 +1,6 @@
 from ml_collections import ConfigDict
 import cloudpickle as pickle
+from copy import deepcopy
 
 
 def create_config_dict(*args, **kwargs):
@@ -17,6 +18,31 @@ def create_config_dict(*args, **kwargs):
         config = create_config_dict(base_config, num_layers=6, hidden_size=768)
     """
     return ConfigDict(dict(*args, **kwargs))
+
+
+def update_config_dict(config: ConfigDict, updates: dict):
+    """Creates an updated ConfigDict with applied changes."""
+    updated_config = deepcopy(config)
+    if updates is not None:
+        updated_config.update(ConfigDict(updates).copy_and_resolve_references())
+    return updated_config
+
+
+def flatten_config_dict(config: ConfigDict, prefix=None):
+    """Flattens a nested ConfigDict into a single-level dictionary."""
+    output = {}
+    for key, val in config.items():
+        if isinstance(val, ConfigDict) or isinstance(val, dict):
+            # Recursively flatten nested dictionaries
+            output.update(flatten_config_dict(val, prefix=key))
+        else:
+            if prefix is not None:
+                # Add prefix to key for nested values
+                output["{}.{}".format(prefix, key)] = val
+            else:
+                # Add top-level key-value pairs directly
+                output[key] = val
+    return output
 
 
 def open_file(path, mode="rb", cache_type="readahead"):
