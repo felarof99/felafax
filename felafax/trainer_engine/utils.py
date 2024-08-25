@@ -79,11 +79,13 @@ def makedirs(path, exist_ok=True):
 
 
 def save_pickle(obj, path):
+    """Saves an object to a pickle file at the specified path."""
     with open_file(path, "wb") as fout:
         pickle.dump(obj, fout)
 
 
 def load_pickle(path):
+    """Loads and returns an object from a pickle file at the specified path."""
     with open_file(path, "rb") as fin:
         data = pickle.load(fin)
     return data
