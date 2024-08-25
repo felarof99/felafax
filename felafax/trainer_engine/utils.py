@@ -2,6 +2,10 @@ from ml_collections import ConfigDict
 import cloudpickle as pickle
 from copy import deepcopy
 
+###################################################
+# ConfigDict utils
+###################################################
+
 
 def create_config_dict(*args, **kwargs):
     """Creates and returns a ml_collections ConfigDict object.
@@ -45,6 +49,11 @@ def flatten_config_dict(config: ConfigDict, prefix=None):
     return output
 
 
+###################################################
+# File system utils (supports GCS too)
+###################################################
+
+
 def open_file(path, mode="rb", cache_type="readahead"):
     if path.startswith("gs://"):
         raise NotImplementedError("GCS is not implemented yet.")
@@ -62,6 +71,11 @@ def makedirs(path, exist_ok=True):
         # return gcsfs.GCSFileSystem().makedirs(path, exist_ok=exist_ok)
     else:
         return os.makedirs(path, exist_ok=exist_ok)
+
+
+###################################################
+# Pickle utils
+###################################################
 
 
 def save_pickle(obj, path):
