@@ -1,11 +1,15 @@
 import jax
 import jax.numpy as jnp
 
+from jax.sharding import PartitionSpec as PS
+from jax.sharding import NamedSharding, Mesh
+from jax.experimental import mesh_utils
 
 ###################################################
 # Util functions for JAX RNG handling
 ###################################################
 rng_generator = None
+
 
 def init_rng(seed):
     global rng_generator
@@ -55,3 +59,17 @@ class NextRNG(object):
 
             # Return a dictionary mapping the provided keys to the new RNG splits
             return {key: val for key, val in zip(keys, split_rngs[1:])}
+
+
+###################################################
+# Utils for JAX sharding
+###################################################
+# TODO: avoid defining mesh globally.
+DEVICES = jax.devices()
+DEVICE_COUNT = len(DEVICES)
+DEVICE_MESH = mesh_utils.create_device_mesh((1, DEVICE_COUNT, 1))
+MESH = Mesh(devices=DEVICE_MESH, axis_names=("dp", "fsdp", "mp"))
+
+
+def apply_sharding_constraint(x, partition_spec):
+    return jax.lax.with_sharding_constraint(x, NamedSharding(MESH, partition_spec))
