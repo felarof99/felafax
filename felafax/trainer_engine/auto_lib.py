@@ -1,13 +1,10 @@
 from typing import Tuple
-from huggingface_hub import snapshot_download
-from transformers import (
-    AutoConfig,
-    AutoTokenizer,
-)
 
+from huggingface_hub import snapshot_download
+from transformers import AutoConfig, AutoTokenizer
 
 MODEL_NAME_TO_DOWNLOAD_CONFIG = {
-    "llama3.1-8b-JAX": {
+    "llama-3.1-8B-JAX": {
         "hf_model_name": "meta-llama/Meta-Llama-3.1-8B",
         "felafax_model_name": "felafax/llama-3.1-8B-JAX",
     },
@@ -24,11 +21,17 @@ class AutoJAXModelForCausalLM:
         **kwargs,
     ) -> Tuple[str, AutoConfig, AutoTokenizer]:
         """Downloads the model from HF and returns the downloaded model path, config, and tokenizer."""
-        download_config = MODEL_NAME_TO_DOWNLOAD_CONFIG[model_name]
 
-        config = AutoConfig.from_pretrained(
-            download_config["hf_model_name"], token=huggingface_token
-        )
+        try:
+            download_config = MODEL_NAME_TO_DOWNLOAD_CONFIG[model_name]
+        except KeyError:
+            raise ValueError(
+                f"Invalid model name: {model_name}. "
+                f"Available models are: {', '.join(MODEL_NAME_TO_DOWNLOAD_CONFIG.keys())}"
+            )
+
+        config = AutoConfig.from_pretrained(download_config["hf_model_name"],
+                                            token=huggingface_token)
 
         tokenizer = AutoTokenizer.from_pretrained(
             download_config["hf_model_name"],
