@@ -1,2 +1,20 @@
 cloudpickle
+datasets>=2.18.0
+einops
+# fastapi
+flax[all]
+# gcsfs
+# gradio
+jax
+# jax-lorax
+jax[tpu]
 ml_collections
+optax
+# pydantic
+# qax
+requests
+sentencepiece
+torch+cpu
+tqdm
+transformers>=4.43
+# uvicorn
