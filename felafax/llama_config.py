@@ -54,15 +54,25 @@ class LlamaFactory:
             ("lm_head/kernel", PS("fsdp", "mp")),
             (".*", PS(None)),
         )
-        
+
     def rng_keys(self):
         return ("params", "dropout", "fcm")
 
+
+class LlamaTest(LlamaFactory):
+
+    def __init__(self):
+        super().__init__()
+        # LlamaTest uses the base configuration without any modifications
+        # All settings are inherited from LlamaFactory
+
+
 class Llama3_1_8B(LlamaFactory):
+
     def __init__(self):
         super().__init__()
         self.model_config.update({
-            "base_model": "llama3_8b",
+            "base_model": "llama3.1_8b",
             "vocab_size": 128256,
             "hidden_size": 4096,
             "intermediate_size": 14336,
@@ -76,10 +86,11 @@ class Llama3_1_8B(LlamaFactory):
 
 
 class Llama3_1_70B(LlamaFactory):
+
     def __init__(self):
         super().__init__()
         self.model_config.update({
-            "base_model": "llama3_70b",
+            "base_model": "llama3.1_70b",
             "vocab_size": 128256,
             "hidden_size": 8192,
             "intermediate_size": 28672,
@@ -92,7 +103,7 @@ class Llama3_1_70B(LlamaFactory):
         })
 
 
-def create_llama_factory(model_name: str) -> LlamaFactory:
+def create_llama_model(model_name: str) -> LlamaFactory:
     """Creates and returns the appropriate llama model."""
     if model_name == "llama3_8b":
         return Llama3_1_8B()
