@@ -65,15 +65,8 @@ class LlamaConfigurator:
         updated_config = config.copy()
         return PretrainedConfig.from_dict(updated_config)
 
-    def rng_keys(self):
-        return ("params", "dropout", "fcm")
-
     def get_partition_rules(self):
-        """Parition rules for GPTJ. Note that these rules are orderd, so that
-        the beginning rules match first. It is important to use
-        PartitionSpec() instead of None here because JAX does not treat
-        None as a pytree leaf.
-        """
+        """Rules for partitioning llama model across TPU cores."""
         return (
             # embeddings
             ("transformer/wte/embedding", PS("mp", "fsdp")),
@@ -92,3 +85,8 @@ class LlamaConfigurator:
             ("lm_head/kernel", PS("fsdp", "mp")),
             (".*", PS(None)),
         )
+        
+     def rng_keys(self):
+        return ("params", "dropout", "fcm")
+
+       
