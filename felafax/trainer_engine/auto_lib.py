@@ -22,6 +22,7 @@ class AutoJAXModelForCausalLM:
     ) -> Tuple[str, AutoConfig, AutoTokenizer]:
         """Downloads the model from HF and returns the downloaded model path, config, and tokenizer."""
 
+        print(f"Downloading model {model_name}...")
         try:
             download_config = MODEL_NAME_TO_DOWNLOAD_CONFIG[model_name]
         except KeyError:
@@ -44,4 +45,6 @@ class AutoJAXModelForCausalLM:
             repo_id=download_config["felafax_model_name"],
             token=huggingface_token,
         )
+        
+        print(f"{model_name} was downloaded to {model_path}.")
         return model_path, config, tokenizer
