@@ -4,10 +4,10 @@ from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_flax_outputs import FlaxBaseModelOutput, FlaxCausalLMOutput
 
 
-class LlamaConfigurator:
-    """Manages LLaMA configuration."""
+class LlamaFactory:
+    """Creates and configures LLaMA model for various sizes."""
 
-    def __init__(self, model_name):
+    def __init__(self):
         self.base_config = {
             "base_model": "llama_test",
             "vocab_size": 32000,
@@ -24,44 +24,13 @@ class LlamaConfigurator:
             "attention_dropout": 0.0,
             "residue_dropout": 0.0,
         }
-
-        self.model_configs = {
-            "llama3_8b": {
-                "base_model": "llama3_8b",
-                "vocab_size": 128256,
-                "hidden_size": 4096,
-                "intermediate_size": 14336,
-                "num_hidden_layers": 32,
-                "num_attention_heads": 32,
-                "num_key_value_heads": 8,
-                "max_position_embeddings": 8192,
-                "rms_norm_eps": 1e-5,
-                "rope_theta": 5e5,
-            },
-            "llama3_70b": {
-                "base_model": "llama3_8b",
-                "vocab_size": 128256,
-                "hidden_size": 8192,
-                "intermediate_size": 28672,
-                "num_hidden_layers": 80,
-                "num_attention_heads": 64,
-                "num_key_value_heads": 8,
-                "max_position_embeddings": 8192,
-                "rms_norm_eps": 1e-5,
-                "rope_theta": 5e5,
-            },
-        }
-
         self.model_config = utils.create_config_dict(self.base_config)
-        if model_name in self.model_configs:
-            self.model_config.update(self.model_configs[model_name])
 
     def get_model_config(self):
         return self.model_config
 
     def get_hf_pretrained_config(self, config):
         """Apply updates on top of standard base model config."""
-        # This is where you get pretrained config from huggingface merged with your updates.
         updated_config = config.copy()
         return PretrainedConfig.from_dict(updated_config)
 
@@ -86,7 +55,50 @@ class LlamaConfigurator:
             (".*", PS(None)),
         )
         
-     def rng_keys(self):
+    def rng_keys(self):
         return ("params", "dropout", "fcm")
 
-       
+class Llama3_1_8B(LlamaFactory):
+    def __init__(self):
+        super().__init__()
+        self.model_config.update({
+            "base_model": "llama3_8b",
+            "vocab_size": 128256,
+            "hidden_size": 4096,
+            "intermediate_size": 14336,
+            "num_hidden_layers": 32,
+            "num_attention_heads": 32,
+            "num_key_value_heads": 8,
+            "max_position_embeddings": 8192,
+            "rms_norm_eps": 1e-5,
+            "rope_theta": 5e5,
+        })
+
+
+class Llama3_1_70B(LlamaFactory):
+    def __init__(self):
+        super().__init__()
+        self.model_config.update({
+            "base_model": "llama3_70b",
+            "vocab_size": 128256,
+            "hidden_size": 8192,
+            "intermediate_size": 28672,
+            "num_hidden_layers": 80,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 8,
+            "max_position_embeddings": 8192,
+            "rms_norm_eps": 1e-5,
+            "rope_theta": 5e5,
+        })
+
+
+def create_llama_factory(model_name: str) -> LlamaFactory:
+    """Creates and returns the appropriate llama model."""
+    if model_name == "llama3_8b":
+        return Llama3_1_8B()
+    elif model_name == "llama3_70b":
+        return Llama3_1_70B()
+    elif model_name == "llama_test":
+        return LlamaFactory()
+    else:
+        raise ValueError(f"Invalid model name: {model_name}")
