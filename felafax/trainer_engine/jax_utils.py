@@ -1,9 +1,12 @@
+import numpy as np
 import jax
 import jax.numpy as jnp
 
 from jax.sharding import PartitionSpec as PS
 from jax.sharding import NamedSharding, Mesh
 from jax.experimental import mesh_utils
+
+import re
 
 ###################################################
 # Util functions for JAX RNG handling
@@ -74,3 +77,80 @@ MESH = Mesh(devices=DEVICE_MESH, axis_names=("dp", "fsdp", "mp"))
 def apply_sharding_constraint(x, partition_spec):
     return jax.lax.with_sharding_constraint(
         x, NamedSharding(MESH, partition_spec))
+
+
+def tree_path_to_string(path, sep=None):
+    """Converts a JAX tree path to a string representation.
+    
+    Example: tree_path_to_string([DictKey('layer1'), SequenceKey(0)], sep='/') -> 'layer1/0'
+    """
+    keys = []
+    for key in path:
+        if isinstance(key, jax.tree_util.SequenceKey):
+            keys.append(str(
+                key.idx))  # Use index for sequences (lists, tuples)
+        elif isinstance(key, jax.tree_util.DictKey):
+            keys.append(str(key.key))  # Use actual key for dictionaries
+        elif isinstance(key, jax.tree_util.GetAttrKey):
+            keys.append(str(key.name))  # Use attribute name for objects
+        elif isinstance(key, jax.tree_util.FlattenedIndexKey):
+            keys.append(str(key.key))  # Use index for flattened arrays
+        else:
+            keys.append(str(key))  # Fallback: convert key to string directly
+
+    if sep is None:
+        return tuple(keys)  # Return as tuple if no separator
+    return sep.join(keys)  # Join with separator if provided
+
+
+def flatten_tree(xs, is_leaf=None, sep=None):
+    """Flattens a JAX tree into a dictionary with path strings as keys."""
+    flattened, _ = jax.tree_util.tree_flatten_with_path(xs, is_leaf=is_leaf)
+    output = {}
+    for key, val in flattened:
+        output[tree_path_to_string(key, sep=sep)] = val
+    return output
+
+
+def named_tree_map(f, tree, is_leaf=None, sep='/'):
+    """
+    Maps a function over a JAX tree, providing both path and value to the function.
+    
+    Args:
+        f: Function to apply to each node. It should accept (path, value) as arguments.
+        tree: The tree structure to map over.
+        is_leaf: Optional function to determine what constitutes a leaf in the tree.
+        sep: Separator used in the string representation of the path.
+    
+    Returns:
+        A new tree with f applied to each node.
+    """
+
+    # Helper function to process each node
+    def process_node(path, value):
+        # Convert the path to a string
+        path_str = tree_path_to_string(path, sep=sep)
+        return f(path_str, value)
+
+    # Apply our helper function to the tree
+    return jax.tree_util.tree_map_with_path(process_node,
+                                            tree,
+                                            is_leaf=is_leaf)
+
+
+def match_partition_rules(rules, params):
+    """Applies partitioning rules to a parameter tree."""
+
+    def get_partition_spec(parm_path, param_value):
+        # Don't partition scalar values
+        if len(param_value.shape) == 0 or np.prod(param_value.shape) == 1:
+            return PS()
+
+        for rule, ps in rules:
+            if re.search(rule, parm_path) is not None:
+                return ps
+
+        raise ValueError(f'Partition rule not found for param: {parm_path}')
+
+    # Apply get_partition_spec to each leaf in the parameter tree
+    return named_tree_map(get_partition_spec, params, sep='/')

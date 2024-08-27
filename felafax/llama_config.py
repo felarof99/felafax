@@ -56,7 +56,7 @@ class LlamaFactory:
             (".*", PS(None)),
         )
 
-    def rng_keys(self):
+    def get_rng_keys(self):
         return ("params", "dropout", "fcm")
 
 
