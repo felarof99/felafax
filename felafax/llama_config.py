@@ -1,7 +1,8 @@
-from .trainer_engine import utils
+from felafax.trainer_engine import utils
 from jax.sharding import PartitionSpec as PS
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_flax_outputs import FlaxBaseModelOutput, FlaxCausalLMOutput
+from copy import copy, deepcopy
 
 
 class LlamaFactory:
@@ -31,7 +32,7 @@ class LlamaFactory:
 
     def get_hf_pretrained_config(self, config):
         """Apply updates on top of standard base model config."""
-        updated_config = config.copy()
+        updated_config = deepcopy(config)
         return PretrainedConfig.from_dict(updated_config)
 
     def get_partition_rules(self):
@@ -105,11 +106,11 @@ class Llama3_1_70B(LlamaFactory):
 
 def create_llama_model(model_name: str) -> LlamaFactory:
     """Creates and returns the appropriate llama model."""
-    if model_name == "llama3_8b":
+    if model_name == "llama-3.1-8B-JAX":
         return Llama3_1_8B()
-    elif model_name == "llama3_70b":
+    elif model_name == "llama-3.1-70B-JAX":
         return Llama3_1_70B()
     elif model_name == "llama_test":
         return LlamaFactory()
     else:
-        raise ValueError(f"Invalid model name: {model_name}")
+        raise ValueError(f"[auto_lib] Invalid model name: {model_name}")

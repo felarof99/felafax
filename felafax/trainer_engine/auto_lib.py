@@ -12,7 +12,6 @@ MODEL_NAME_TO_DOWNLOAD_CONFIG = {
     "llama-3.1-8B-JAX": {
         "hf_model_name": "meta-llama/Meta-Llama-3.1-8B",
         "felafax_model_name": "felafax/llama-3.1-8B-JAX",
-        "llama_config_id": "llama3.1_8b",
     },
 }
 
@@ -56,8 +55,7 @@ class AutoJAXModelForCausalLM:
         print(f"{model_name} was downloaded to {model_path}.")
 
         # Create LlamaFactory and model
-        llama_factory = create_llama_factory(
-            download_config["llama_config_id"])
+        llama_factory = create_llama_model(model_name)
         llama_config = llama_factory.get_model_config()
         hf_pretrained_llama_config = llama_factory.get_hf_pretrained_config(
             llama_config)
