@@ -1,6 +1,8 @@
-"""Sets up the environment for the training."""
+"""Sets up the environment for the training and provides utility functions."""
 
 import os
+import sys
+import importlib
 
 
 def setup_environment():
@@ -15,8 +17,41 @@ def setup_environment():
     os.system("export TOKENIZERS_PARALLELISM=false")
 
 
+def clear_cache():
+    # Clear Python's import cache
+    sys.modules.pop('felafax.trainer_engine', None)
+    for key in list(sys.modules.keys()):
+        if key.startswith('felafax.trainer_engine.'):
+            sys.modules.pop(key, None)
+
+    # Remove .pyc files
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    for root, dirs, files in os.walk(current_dir):
+        for file in files:
+            if file.endswith('.pyc'):
+                os.remove(os.path.join(root, file))
+
+
+def reload_modules():
+    clear_cache()
+    import felafax.trainer_engine
+    modules_to_reload = [
+        module for name, module in sys.modules.items()
+        if name.startswith('felafax.trainer_engine')
+    ]
+    for module in modules_to_reload:
+        try:
+            importlib.reload(module)
+        except ModuleNotFoundError as e:
+            print(
+                f"Warning: Could not reload module {module.__name__}. Error: {e}"
+            )
+    print("Attempted to reload all felafax.trainer_engine modules")
+
+
 def main():
     setup_environment()
+    reload_modules()
 
 
 if __name__ == "__main__":

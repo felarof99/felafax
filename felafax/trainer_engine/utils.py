@@ -28,7 +28,8 @@ def update_config_dict(config: ConfigDict, updates: dict):
     """Creates an updated ConfigDict with applied changes."""
     updated_config = deepcopy(config)
     if updates is not None:
-        updated_config.update(ConfigDict(updates).copy_and_resolve_references())
+        updated_config.update(
+            ConfigDict(updates).copy_and_resolve_references())
     return updated_config
 
 

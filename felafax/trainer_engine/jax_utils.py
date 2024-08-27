@@ -72,4 +72,5 @@ MESH = Mesh(devices=DEVICE_MESH, axis_names=("dp", "fsdp", "mp"))
 
 
 def apply_sharding_constraint(x, partition_spec):
-    return jax.lax.with_sharding_constraint(x, NamedSharding(MESH, partition_spec))
+    return jax.lax.with_sharding_constraint(
+        x, NamedSharding(MESH, partition_spec))
