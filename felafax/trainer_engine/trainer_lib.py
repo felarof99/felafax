@@ -26,7 +26,6 @@ class Trainer:
         model_config,
         optimizer,
         training_config,
-        mesh,
         model_params=None,
     ):
         self.model = model
@@ -35,7 +34,7 @@ class Trainer:
 
         self.optimizer = optimizer
         self.training_config = training_config
-        self.mesh = mesh
+        self.mesh = jax_utils.MESH
 
         self.checkpointer = checkpoint_lib.Checkpointer(
             checkpoint_lib.Checkpointer.get_default_config(),

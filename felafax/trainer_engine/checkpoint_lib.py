@@ -54,9 +54,10 @@ class Checkpointer(object):
             config = utils.update_config_dict(config, updates)
         return config
 
-    def __init__(self, config, checkpoint_dir):
+    def __init__(self, config, checkpoint_dir, enable_checkpointer=True):
         self.config = self.get_default_config(config)
         self.checkpoint_dir = checkpoint_dir
+        self.enable_checkpointer = enable_checkpointer
 
     def save_checkpoint_simple(self, params, filename):
         path = os.path.join(self.checkpoint_dir, filename)
@@ -65,7 +66,10 @@ class Checkpointer(object):
                 flax.serialization.msgpack_serialize(params, in_place=True))
 
     def save_checkpoint(self, train_state, filename, gather_fns=None):
-        path = os.path.join(self.checkpoint_dir, filename)
+        if self.enable_checkpointer:
+            path = os.path.join(self.checkpoint_dir, filename)
+        else:
+            path = "/dev/null"
         self.save_train_state_to_file(train_state, path, gather_fns,
                                       self.config.float_dtype)
 
