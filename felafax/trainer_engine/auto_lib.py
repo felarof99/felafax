@@ -55,15 +55,15 @@ class AutoJAXModelForCausalLM:
         print(f"{model_name} was downloaded to {model_path}.")
 
         # Create LlamaFactory and model
-        llama_factory = create_llama_model(model_name)
-        llama_config = llama_factory.get_model_config()
-        hf_pretrained_llama_config = llama_factory.get_hf_pretrained_config(
-            llama_config)
+        llama_model = create_llama_model(model_name)
+        llama_model_config = llama_model.get_model_config()
+        pretrained_llama_config = llama_model.get_hf_pretrained_config(
+            llama_model_config)
 
         model = llama_model.CausalLlamaModule(
-            hf_pretrained_llama_config,
+            pretrained_llama_config,
             dtype=jnp.float32,
             param_dtype=jnp.float32,
         )
 
-        return model_path, model, llama_config, tokenizer
+        return model_path, model, llama_model_config, tokenizer
