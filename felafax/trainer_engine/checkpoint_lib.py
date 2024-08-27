@@ -2,45 +2,70 @@ import os
 
 import flax
 import jax
+import jax.numpy as jnp
+
 import msgpack
 from flax.serialization import (from_bytes, from_state_dict, to_bytes,
                                 to_state_dict)
 from flax.traverse_util import empty_node, flatten_dict, unflatten_dict
 from ml_collections import ConfigDict
 
-from . import config_lib, utils
-from .config_lib import config_dict
-from .utils import float_tensor_to_dtype, tree_apply
+from felafax.trainer_engine import utils
+
+
+def get_float_dtype_by_name(dtype):
+    return {
+        'bf16': jnp.bfloat16,
+        'bfloat16': jnp.bfloat16,
+        'fp16': jnp.float16,
+        'float16': jnp.float16,
+        'fp32': jnp.float32,
+        'float32': jnp.float32,
+        'fp64': jnp.float64,
+        'float64': jnp.float64,
+    }[dtype]
+
+
+def tree_apply(fns, tree):
+    """ Apply a pytree of functions to the pytree. """
+    return jax.tree_util.tree_map(lambda fn, x: fn(x), fns, tree)
+
+
+def float_tensor_to_dtype(tensor, dtype):
+    if dtype is None or dtype == '':
+        return tensor
+    if isinstance(dtype, str):
+        dtype = get_float_dtype_by_name(dtype)
+    float_dtypes = (jnp.bfloat16, jnp.float16, jnp.float32, jnp.float64)
+    if getattr(tensor, 'dtype', None) in float_dtypes:
+        tensor = tensor.astype(dtype)
+    return tensor
 
 
 class Checkpointer(object):
-    """Checkpoints large JAX models efficiently.
-
-    Utilizes msgpack for streaming serialization of individual tensors,
-    optimizing memory usage and storage capacity. This approach is
-    particularly advantageous for distributed training environments.
-    """
+    """Checkpoints JAX models efficiently."""
 
     @staticmethod
     def get_default_config(updates=None):
-        config = ConfigDict()
-        config.float_dtype = "bf16"
-        config.save_optimizer_state = False
+        config = utils.create_config_dict(float_dtype="bf16",
+                                          save_optimizer_state=False)
 
         if updates is not None:
-            config.update(ConfigDict(updates).copy_and_resolve_references())
+            config = utils.update_config_dict(config, updates)
         return config
 
-    def __init__(self, config, checkpoint_dir, enable_checkpointer=True):
+    def __init__(self, config, checkpoint_dir):
         self.config = self.get_default_config(config)
         self.checkpoint_dir = checkpoint_dir
-        self.enable_checkpointer = enable_checkpointer
+
+    def save_checkpoint_simple(self, params, filename):
+        path = os.path.join(self.checkpoint_dir, filename)
+        with utils.open_file(path, "wb") as fout:
+            fout.write(
+                flax.serialization.msgpack_serialize(params, in_place=True))
 
     def save_checkpoint(self, train_state, filename, gather_fns=None):
-        if self.enable_checkpointer:
-            path = os.path.join(self.checkpoint_dir, filename)
-        else:
-            path = "/dev/null"
+        path = os.path.join(self.checkpoint_dir, filename)
         self.save_train_state_to_file(train_state, path, gather_fns,
                                       self.config.float_dtype)
 
@@ -62,19 +87,7 @@ class Checkpointer(object):
                 value = float_tensor_to_dtype(value, float_dtype)
                 fout.write(packer.pack((key, to_bytes(value))))
 
-    def save_pickle(self, obj, filename):
-        if self.enable_checkpointer:
-            path = os.path.join(self.checkpoint_dir, filename)
-        else:
-            path = "/dev/null"
-        config_lib.save_pickle(obj, path)
-
-    def save_all(self,
-                 train_state,
-                 gather_fns,
-                 metadata=None,
-                 dataset=None,
-                 milestone=False):
+    def save_all(self, train_state, gather_fns):
         step = int(jax.device_get(train_state.step))
         if self.config.save_optimizer_state:
             checkpoint_state = train_state
@@ -85,66 +98,16 @@ class Checkpointer(object):
             checkpoint_name = "streaming_params"
             checkpoint_gather_fns = gather_fns.params["params"]
 
-        if milestone:
-            # Save a milestone checkpoint that will not be overwritten
-            self.save_pickle(metadata, f"metadata_{step}.pkl")
-            self.save_pickle(dataset, f"dataset_{step}.pkl")
-            self.save_checkpoint(checkpoint_state, f"{checkpoint_name}_{step}",
-                                 checkpoint_gather_fns)
-        else:
-            # Save a normal checkpoint that can be overwritten
-            self.save_pickle(metadata, "metadata.pkl")
-            self.save_pickle(dataset, "dataset.pkl")
-            self.save_checkpoint(checkpoint_state, f"{checkpoint_name}",
-                                 checkpoint_gather_fns)
-
-    @staticmethod
-    def load_checkpoint(path,
-                        target=None,
-                        shard_fns=None,
-                        remove_dict_prefix=None):
-        if shard_fns is not None:
-            shard_fns = flatten_dict(to_state_dict(shard_fns))
-        if remove_dict_prefix is not None:
-            remove_dict_prefix = tuple(remove_dict_prefix)
-        flattend_train_state = {}
-        with config_lib.open_file(path) as fin:
-            # 83886080 bytes = 80 MB, which is 16 blocks on GCS
-            unpacker = msgpack.Unpacker(fin,
-                                        read_size=83886080,
-                                        max_buffer_size=0)
-            for key, value in unpacker:
-                key = tuple(key)
-                if remove_dict_prefix is not None:
-                    if key[:len(remove_dict_prefix)] == remove_dict_prefix:
-                        key = key[len(remove_dict_prefix):]
-                    else:
-                        continue
-
-                tensor = from_bytes(None, value)
-                if shard_fns is not None:
-                    tensor = shard_fns[key](tensor)
-                flattend_train_state[key] = tensor
-
-        if target is not None:
-            flattened_target = flatten_dict(to_state_dict(target),
-                                            keep_empty_nodes=True)
-            for key, value in flattened_target.items():
-                if key not in flattend_train_state and value == empty_node:
-                    flattend_train_state[key] = value
-
-        train_state = unflatten_dict(flattend_train_state)
-        if target is None:
-            return train_state
-
-        return from_state_dict(target, train_state)
+        # Save a normal checkpoint that can be overwritten
+        self.save_checkpoint(checkpoint_state, f"{checkpoint_name}",
+                             checkpoint_gather_fns)
 
     @staticmethod
     def load_flax_checkpoint(path, target=None, shard_fns=None):
         """Load a standard flax checkpoint that's not saved with the
         msgpack streaming format.
         """
-        with config_lib.open_file(path) as fin:
+        with utils.open_file(path) as fin:
             encoded_bytes = fin.read()
 
         state_dict = flax.serialization.msgpack_restore(encoded_bytes)
@@ -179,31 +142,7 @@ class Checkpointer(object):
             assert load_type != "trainstate", "Loading full trainstate is not allowed!"
         train_state = None
         restored_params = None
-        if load_type == "trainstate":
-            # Load the entire train state in the streaming format
-            train_state = cls.load_checkpoint(
-                path=load_path,
-                target=trainstate_target,
-                shard_fns=trainstate_shard_fns,
-            )
-        elif load_type == "trainstate_params":
-            # Load the params part of the train state in the streaming format
-            restored_params = cls.load_checkpoint(
-                path=load_path,
-                target=params_target,
-                shard_fns=params_shard_fns,
-                remove_dict_prefix=("params", "params"),
-            )
-            restored_params = {"params": restored_params}
-        elif load_type == "params":
-            # Load the params in the streaming format
-            restored_params = cls.load_checkpoint(
-                path=load_path,
-                target=params_target,
-                shard_fns=params_shard_fns,
-            )
-            restored_params = {"params": restored_params}
-        elif load_type == "flax_params":
+        if load_type == "flax_params":
             # Load the params in the standard flax format (non-streaming)
             # This requires the entire params to fit in memory
             restored_params = cls.load_flax_checkpoint(
