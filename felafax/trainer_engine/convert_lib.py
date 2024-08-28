@@ -171,3 +171,16 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
         llama_pretrained_config=model_configurator.get_hf_pretrained_config(
             model_configurator.get_model_config()),
     )
+
+
+def upload_checkpoint_to_hf(checkpoint_path, hf_path, hf_token):
+    from huggingface_hub import HfApi
+    api = HfApi()
+
+    print(f"Uploading checkpoint to {hf_path}...")
+    api.upload_folder(folder_path=checkpoint_path,
+                      repo_id=hf_path,
+                      repo_type="model",
+                      ignore_patterns=[".*"],
+                      token=hf_token)
+    print(f"Uploaded checkpoint to {hf_path}.")
