@@ -44,8 +44,7 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
     def load_and_convert_checkpoint(path):
         _, flax_params = checkpoint_lib.Checkpointer.load_trainstate_checkpoint(
             path)
-        flax_params = flax_params[
-            'params']  # TODO(ntnsonti): why is this shit required.
+        # flax_params = flax_params['params']  # TODO(ntnsonti): why is this shit required.
         flax_params = flatten_dict(flax_params['params'], sep='.')
         torch_params = {}
         for key, tensor in flax_params.items():
