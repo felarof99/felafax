@@ -267,16 +267,20 @@ class CausalLMTrainer(FelafaxTrainer):
     def compute_loss(self, logits, labels, mask):
         return cross_entropy_loss_and_accuracy(logits, labels, mask)
 
-    def save_hf_compatible_checkpoint(self, state, save_path):
+    def save_hf_compatible_checkpoint(self, model_params, save_path):
+        # model_params shouldn't have params as a key under it.
         print(f"Saving HuggingFace-compatible checkpoint to {save_path}...")
         os.makedirs(save_path, exist_ok=True)
         tmp_model_path = os.path.join(save_path, "tmp")
         os.makedirs(tmp_model_path, exist_ok=True)
 
         # Convert Flax params to PyTorch
-        flax_params = flax.traverse_util.flatten_dict(state.params, sep='.')
+        flax_params = flax.traverse_util.flatten_dict(model_params, sep='.')
         torch_params = {}
         for key, tensor in flax_params.items():
+            if isinstance(tensor, (bool, int, float)):
+                # Skip non-tensor values
+                continue
             if "kernel" in key and "norm" not in key and 'ln_f' not in key:
                 tensor = tensor.T
             torch_params[key] = torch.tensor(
