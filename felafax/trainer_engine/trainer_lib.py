@@ -31,7 +31,7 @@ class TrainState(train_state.TrainState):
     training_config: TrainingConfig
 
 
-class FelafaxModule(ABC):
+class FelafaxTrainer(ABC):
 
     @abstractmethod
     def setup(self):
@@ -58,7 +58,7 @@ class FelafaxModule(ABC):
         pass
 
 
-class CausalLMTrainer(FelafaxModule):
+class CausalLMTrainer(FelafaxTrainer):
 
     def __init__(
         self,
@@ -139,20 +139,23 @@ class CausalLMTrainer(FelafaxModule):
                                  tx=self.optimizer,
                                  training_config=self.training_config)
 
-    @functools.partial(
-        jax.jit,
-        in_shardings=(
-            self.state_shapes_partitioned,  # state
-            PS(("dp", "fsdp")),  # batch
-            PS()  # rng
-        ),
-        out_shardings=(
-            self.state_shapes_partitioned,  # updated state
-            PS(),  # new rng
-            PS()  # metrics
-        ))
+    @property
+    def jitted_train_step(self):
+        return jax.jit(
+            self.train_step,
+            in_shardings=(
+                self.state_shapes_partitioned,  # state
+                PS(("dp", "fsdp")),  # batch
+                PS()  # rng
+            ),
+            out_shardings=(
+                self.state_shapes_partitioned,  # updated state
+                PS(),  # new rng
+                PS()  # metrics
+            ))
+
     def train_step(self, state, batch, rng):
-        rng_generator = utils.NextRNG(rng)
+        rng_generator = jax_utils.NextRNG(rng)
 
         def loss_and_accuracy(params):
             logits = state.apply_fn(
@@ -173,15 +176,24 @@ class CausalLMTrainer(FelafaxModule):
         )
         return state, rng_generator(), metrics
 
-    @functools.partial(jax.jit,
-                       in_shardings=(PS(("dp", "fsdp")), PS(("dp", "fsdp"))),
-                       out_shardings=PS())
+    @property
+    def jitted_eval_step(self):
+        return jax.jit(
+            self.eval_step,
+            in_shardings=(
+                self.state_shapes_partitioned,  # state
+                PS(("dp", "fsdp")),  # batch
+            ),
+            out_shardings=PS()  # metrics
+        )
+
     def eval_step(self, state, batch):
         logits = state.apply_fn(
             state.params,
             batch["input_tokens"],
             deterministic=True,
         ).logits
+
         loss, accuracy = self.compute_loss(logits, batch["target_tokens"],
                                            batch["loss_masks"])
         metrics = dict(
@@ -190,7 +202,7 @@ class CausalLMTrainer(FelafaxModule):
         )
         return metrics
 
-    def train(self, train_dataloader, eval_dataloader):
+    def train(self, train_dataloader, eval_dataloader, run_jitted=True):
         with self.mesh:
             state = self.train_state
 
@@ -201,9 +213,15 @@ class CausalLMTrainer(FelafaxModule):
                     train_batch = jax.device_put(
                         train_batch,
                         NamedSharding(self.mesh, PS(("dp", "fsdp"))))
-                    sharded_rng = utils.next_rng()
-                    state, sharded_rng, metrics = self.train_step(
-                        state, train_batch, sharded_rng)
+
+                    sharded_rng = jax_utils.next_rng()
+
+                    if run_jitted:
+                        state, sharded_rng, metrics = self.jitted_train_step(
+                            state, train_batch, sharded_rng)
+                    else:
+                        state, sharded_rng, metrics = self.train_step(
+                            state, train_batch, sharded_rng)
 
                     if step % self.training_config.print_every_n_steps == 0:
                         print(
@@ -223,7 +241,7 @@ class CausalLMTrainer(FelafaxModule):
             self.train_state = state
         return state
 
-    def evaluate(self, state, eval_dataloader):
+    def evaluate(self, state, eval_dataloader, run_jitted=True):
         total_loss = 0
         total_accuracy = 0
         num_batches = 0
@@ -232,7 +250,11 @@ class CausalLMTrainer(FelafaxModule):
             for eval_batch in eval_dataloader:
                 eval_batch = jax.device_put(
                     eval_batch, NamedSharding(self.mesh, PS(("dp", "fsdp"))))
-                metrics = self.eval_step(state, eval_batch)
+
+                if run_jitted:
+                    metrics = self.jitted_eval_step(state, eval_batch)
+                else:
+                    metrics = self.eval_step(state, eval_batch)
                 total_loss += metrics['loss']
                 total_accuracy += metrics['accuracy']
                 num_batches += 1
@@ -244,7 +266,8 @@ class CausalLMTrainer(FelafaxModule):
 
     def save_checkpoint(self, state, path):
         with self.mesh:
-            self.checkpointer.save_all(train_state=state, path=path)
+            self.checkpointer.save_checkpoint_simple(params=state.params,
+                                                     filename=path)
 
     def load_checkpoint(self, path):
         with self.mesh:
@@ -253,10 +276,4 @@ class CausalLMTrainer(FelafaxModule):
             return self.create_train_state_from_params(params)
 
     def compute_loss(self, logits, labels, mask):
-        return utils.cross_entropy_loss_and_accuracy(logits, labels, mask)
-
-    @functools.partial(jax.jit,
-                       in_shardings=(PS(("dp", "fsdp")), PS(("dp", "fsdp"))),
-                       out_shardings=PS(("dp", "fsdp")))
-    def apply_fn(self, state, x):
-        return state.apply_fn({'params': state.params}, x)
+        return jax_utils.cross_entropy_loss_and_accuracy(logits, labels, mask)
