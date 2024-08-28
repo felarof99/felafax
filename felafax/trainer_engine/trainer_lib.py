@@ -13,24 +13,6 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec as PS
 from . import checkpoint_lib, utils, jax_utils
 
 
-@chex.dataclass(frozen=True)
-class TrainingConfig:
-    """Configures the training pipeline with hyperparameters and limits."""
-    learning_rate: float = 1e-4
-    num_epochs: int = 1
-    max_steps: Optional[int] = 5
-    batch_size: int = 32
-    max_length: int = 64
-    dataset_size_limit: Optional[int] = 512
-    print_every_n_steps: int = 1
-    eval_every_n_steps: int = 100
-
-
-class TrainState(train_state.TrainState):
-    """Stores the training state, including the model and configuration."""
-    training_config: TrainingConfig
-
-
 class FelafaxTrainer(ABC):
 
     @abstractmethod
@@ -91,6 +73,9 @@ class CausalLMTrainer(FelafaxTrainer):
         self.state_shapes_partitioned = jax_utils.match_partition_rules(
             self.model_configurator.get_partition_rules(), self.state_shapes)
 
+        self.shard_fns, self.gather_fns = jax_utils.make_shard_and_gather_fns(
+            self.state_shapes_partitioned, self.state_shapes)
+
         jax_utils.init_rng(99)
         jax_utils.next_rng()
 
@@ -114,13 +99,13 @@ class CausalLMTrainer(FelafaxTrainer):
                 rng=jax.random.PRNGKey(0),
                 model=self.model,
                 model_config=self.model_configurator,
-                seq_length=self.training_config.max_length,
+                seq_length=self.training_config.seq_length,
                 optimizer=self.optimizer,
             ))
 
     @staticmethod
     def initialize_state(rng, model, model_config, seq_length, optimizer):
-        rng_generator = utils.NextRNG(rng)
+        rng_generator = jax_utils.NextRNG(rng)
 
         # TODO(ntnsonti): The batch is probably hardcoded to 4 because of the 4 TPU cores, but it can be 1 as well.
         params = model.init(
@@ -129,15 +114,14 @@ class CausalLMTrainer(FelafaxTrainer):
             attention_mask=jnp.ones((4, seq_length), dtype=jnp.int32),
             rngs=rng_generator(model_config.get_rng_keys()),
         )
-        return TrainState.create(params=params,
-                                 tx=optimizer,
-                                 apply_fn=model.apply)
+        return train_state.TrainState.create(params=params,
+                                             tx=optimizer,
+                                             apply_fn=model.apply)
 
     def create_train_state_from_params(self, params):
-        return TrainState.create(params=params,
-                                 apply_fn=self.model.apply,
-                                 tx=self.optimizer,
-                                 training_config=self.training_config)
+        return train_state.TrainState.create(params=params,
+                                             apply_fn=self.model.apply,
+                                             tx=self.optimizer)
 
     @property
     def jitted_train_step(self):
@@ -211,8 +195,7 @@ class CausalLMTrainer(FelafaxTrainer):
 
                 for step, train_batch in enumerate(train_dataloader):
                     train_batch = jax.device_put(
-                        train_batch,
-                        NamedSharding(self.mesh, PS(("dp", "fsdp"))))
+                        train_batch, NamedSharding(self.mesh, PS()))
 
                     sharded_rng = jax_utils.next_rng()
 
