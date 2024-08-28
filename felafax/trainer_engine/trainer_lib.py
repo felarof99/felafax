@@ -247,8 +247,10 @@ class CausalLMTrainer(FelafaxTrainer):
         }
 
     def save_checkpoint(self, state, path):
+        print(f"Saving checkpoint to {path}...")
         self.checkpointer.save_checkpoint_simple(params=state.params,
                                                  filename=path)
+        print(f"Checkpoint saved to {path}.")
 
     def load_checkpoint(self, path):
         _, params = self.checkpointer.load_trainstate_checkpoint(
