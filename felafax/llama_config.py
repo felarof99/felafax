@@ -1,3 +1,4 @@
+from typing import Union
 from felafax.trainer_engine import utils
 from jax.sharding import PartitionSpec as PS
 from transformers.configuration_utils import PretrainedConfig
@@ -60,7 +61,7 @@ class LlamaFactory:
         return ("params", "dropout", "fcm")
 
 
-class LlamaTest(LlamaFactory):
+class LlamaTestConfigurator(LlamaFactory):
 
     def __init__(self):
         super().__init__()
@@ -68,7 +69,7 @@ class LlamaTest(LlamaFactory):
         # All settings are inherited from LlamaFactory
 
 
-class Llama3_1_8B(LlamaFactory):
+class Llama3_1_8B_Configurator(LlamaFactory):
 
     def __init__(self):
         super().__init__()
@@ -86,7 +87,7 @@ class Llama3_1_8B(LlamaFactory):
         })
 
 
-class Llama3_1_70B(LlamaFactory):
+class Llama3_1_70B_Configurator(LlamaFactory):
 
     def __init__(self):
         super().__init__()
@@ -104,12 +105,15 @@ class Llama3_1_70B(LlamaFactory):
         })
 
 
-def create_llama_model(model_name: str) -> LlamaFactory:
+def create_llama_model(
+    model_name: str
+) -> Union[LlamaTestConfigurator, Llama3_1_8B_Configurator,
+           Llama3_1_70B_Configurator]:
     """Creates and returns the appropriate llama model."""
     if model_name == "llama-3.1-8B-JAX":
-        return Llama3_1_8B()
+        return Llama3_1_8B_Configurator()
     elif model_name == "llama-3.1-70B-JAX":
-        return Llama3_1_70B()
+        return Llama3_1_70B_Configurator()
     elif model_name == "llama_test":
         return LlamaFactory()
     else:
