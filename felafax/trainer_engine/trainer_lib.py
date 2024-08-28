@@ -11,6 +11,7 @@ from flax.training import train_state
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as PS
 
 from . import checkpoint_lib, utils, jax_utils
+from felafax.llama_train import cross_entropy_loss_and_accuracy
 
 
 class FelafaxTrainer(ABC):
@@ -255,4 +256,4 @@ class CausalLMTrainer(FelafaxTrainer):
         return self.create_train_state_from_params(params)
 
     def compute_loss(self, logits, labels, mask):
-        return jax_utils.cross_entropy_loss_and_accuracy(logits, labels, mask)
+        return cross_entropy_loss_and_accuracy(logits, labels, mask)

@@ -83,10 +83,15 @@ def make_shard_and_gather_fns(partition_specs, dtype_specs=None):
         return to_dtype
 
     def make_shard_fn(partition_spec, dtype_spec=None):
+        # Check if partition_spec is already a NamedSharding
+        if isinstance(partition_spec, NamedSharding):
+            out_sharding = partition_spec
+        else:
+            out_sharding = NamedSharding(MESH, partition_spec)
+
         jax_shard_function = jax.jit(make_to_dtype_fn(dtype_spec),
                                      in_shardings=None,
-                                     out_shardings=NamedSharding(
-                                         MESH, partition_spec))
+                                     out_shardings=out_sharding)
 
         def shard_fn(tensor):
             return jax_shard_function(tensor).block_until_ready()
@@ -94,9 +99,14 @@ def make_shard_and_gather_fns(partition_specs, dtype_specs=None):
         return shard_fn
 
     def make_gather_fn(partition_spec, dtype_spec=None):
+        # Check if partition_spec is already a NamedSharding
+        if isinstance(partition_spec, NamedSharding):
+            in_sharding = partition_spec
+        else:
+            in_sharding = NamedSharding(MESH, partition_spec)
+
         jax_gather_fn = jax.jit(make_to_dtype_fn(dtype_spec),
-                                in_shardings=NamedSharding(
-                                    MESH, partition_spec),
+                                in_shardings=in_sharding,
                                 out_shardings=None)
 
         def gather_fn(tensor):
