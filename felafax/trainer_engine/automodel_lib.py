@@ -2,11 +2,12 @@ from typing import Tuple, Union, Dict
 
 from huggingface_hub import snapshot_download
 from transformers import AutoConfig, AutoTokenizer
-from felafax.llama_config import create_llama_model, Llama3_1_8B, Llama3_1_70B, LlamaTest
+from felafax.llama_config import create_llama_model, Llama3_1_8B_Configurator, Llama3_1_70B_Configurator, LlamaTestConfigurator
 from felafax import llama_model
 import jax.numpy as jnp
 
-LlamaConfigType = Union[Dict, Llama3_1_8B, Llama3_1_70B, LlamaTest]
+LlamaConfigType = Union[Dict, Llama3_1_8B_Configurator,
+                        Llama3_1_70B_Configurator, LlamaTestConfigurator]
 
 MODEL_NAME_TO_DOWNLOAD_CONFIG = {
     "llama-3.1-8B-JAX": {
