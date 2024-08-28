@@ -195,11 +195,11 @@ def match_partition_rules(rules, params):
     def get_partition_spec(parm_path, param_value):
         # Don't partition scalar values
         if len(param_value.shape) == 0 or np.prod(param_value.shape) == 1:
-            return PS()
+            return NamedSharding(MESH, PS())
 
         for rule, ps in rules:
             if re.search(rule, parm_path) is not None:
-                return ps
+                return NamedSharding(MESH, ps)
 
         raise ValueError(f'Partition rule not found for param: {parm_path}')
 

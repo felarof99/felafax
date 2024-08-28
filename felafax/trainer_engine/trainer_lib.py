@@ -129,13 +129,13 @@ class CausalLMTrainer(FelafaxTrainer):
             self.train_step,
             in_shardings=(
                 self.state_shapes_partitioned,  # state
-                PS(("dp", "fsdp")),  # batch
-                PS()  # rng
+                NamedSharding(self.mesh, PS()),  # batch
+                NamedSharding(self.mesh, PS())  # rng
             ),
             out_shardings=(
                 self.state_shapes_partitioned,  # updated state
-                PS(),  # new rng
-                PS()  # metrics
+                NamedSharding(self.mesh, PS()),  # new rng
+                NamedSharding(self.mesh, PS())  # metrics
             ))
 
     def train_step(self, state, batch, rng):
@@ -166,9 +166,9 @@ class CausalLMTrainer(FelafaxTrainer):
             self.eval_step,
             in_shardings=(
                 self.state_shapes_partitioned,  # state
-                PS(("dp", "fsdp")),  # batch
+                NamedSharding(self.mesh, PS()),  # batch
             ),
-            out_shardings=PS()  # metrics
+            out_shardings=NamedSharding(self.mesh, PS())  # metrics
         )
 
     def eval_step(self, state, batch):
@@ -187,41 +187,40 @@ class CausalLMTrainer(FelafaxTrainer):
         return metrics
 
     def train(self, train_dataloader, eval_dataloader, run_jitted=True):
-        with self.mesh:
-            state = self.train_state
+        state = self.train_state
 
-            for epoch in range(self.training_config.num_epochs):
-                print(f"Starting epoch {epoch} of training...")
+        for epoch in range(self.training_config.num_epochs):
+            print(f"Starting epoch {epoch} of training...")
 
-                for step, train_batch in enumerate(train_dataloader):
-                    train_batch = jax.device_put(
-                        train_batch, NamedSharding(self.mesh, PS()))
+            for step, train_batch in enumerate(train_dataloader):
+                train_batch = jax.device_put(train_batch,
+                                             NamedSharding(self.mesh, PS()))
 
-                    sharded_rng = jax_utils.next_rng()
+                sharded_rng = jax_utils.next_rng()
 
-                    if run_jitted:
-                        state, sharded_rng, metrics = self.jitted_train_step(
-                            state, train_batch, sharded_rng)
-                    else:
-                        state, sharded_rng, metrics = self.train_step(
-                            state, train_batch, sharded_rng)
+                if run_jitted:
+                    state, sharded_rng, metrics = self.jitted_train_step(
+                        state, train_batch, sharded_rng)
+                else:
+                    state, sharded_rng, metrics = self.train_step(
+                        state, train_batch, sharded_rng)
 
-                    if step % self.training_config.print_every_n_steps == 0:
-                        print(
-                            f"Epoch {epoch}, Step {step}, Train Loss: {metrics['loss']:.4f}, Accuracy: {metrics['accuracy']:.4f}"
-                        )
+                if step % self.training_config.print_every_n_steps == 0:
+                    print(
+                        f"Epoch {epoch}, Step {step}, Train Loss: {metrics['loss']:.4f}, Accuracy: {metrics['accuracy']:.4f}"
+                    )
 
-                    if step % self.training_config.eval_every_n_steps == 0:
-                        eval_metrics = self.evaluate(state, eval_dataloader)
-                        print(
-                            f"Epoch {epoch}, Step {step}, Eval Loss: {eval_metrics['loss']:.4f}, Accuracy: {eval_metrics['accuracy']:.4f}"
-                        )
+                if step % self.training_config.eval_every_n_steps == 0:
+                    eval_metrics = self.evaluate(state, eval_dataloader)
+                    print(
+                        f"Epoch {epoch}, Step {step}, Eval Loss: {eval_metrics['loss']:.4f}, Accuracy: {eval_metrics['accuracy']:.4f}"
+                    )
 
-                    if (self.training_config.max_steps
-                            and step >= self.training_config.max_steps):
-                        break
+                if (self.training_config.max_steps
+                        and step >= self.training_config.max_steps):
+                    break
 
-            self.train_state = state
+        self.train_state = state
         return state
 
     def evaluate(self, state, eval_dataloader, run_jitted=True):
@@ -229,18 +228,17 @@ class CausalLMTrainer(FelafaxTrainer):
         total_accuracy = 0
         num_batches = 0
 
-        with self.mesh:
-            for eval_batch in eval_dataloader:
-                eval_batch = jax.device_put(
-                    eval_batch, NamedSharding(self.mesh, PS(("dp", "fsdp"))))
+        for eval_batch in eval_dataloader:
+            eval_batch = jax.device_put(
+                eval_batch, NamedSharding(self.mesh, PS(("dp", "fsdp"))))
 
-                if run_jitted:
-                    metrics = self.jitted_eval_step(state, eval_batch)
-                else:
-                    metrics = self.eval_step(state, eval_batch)
-                total_loss += metrics['loss']
-                total_accuracy += metrics['accuracy']
-                num_batches += 1
+            if run_jitted:
+                metrics = self.jitted_eval_step(state, eval_batch)
+            else:
+                metrics = self.eval_step(state, eval_batch)
+            total_loss += metrics['loss']
+            total_accuracy += metrics['accuracy']
+            num_batches += 1
 
         return {
             'loss': total_loss / num_batches,
@@ -248,15 +246,13 @@ class CausalLMTrainer(FelafaxTrainer):
         }
 
     def save_checkpoint(self, state, path):
-        with self.mesh:
-            self.checkpointer.save_checkpoint_simple(params=state.params,
-                                                     filename=path)
+        self.checkpointer.save_checkpoint_simple(params=state.params,
+                                                 filename=path)
 
     def load_checkpoint(self, path):
-        with self.mesh:
-            _, params = self.checkpointer.load_trainstate_checkpoint(
-                path, self.state_shapes, self.shard_fns)
-            return self.create_train_state_from_params(params)
+        _, params = self.checkpointer.load_trainstate_checkpoint(
+            path, self.state_shapes, self.shard_fns)
+        return self.create_train_state_from_params(params)
 
     def compute_loss(self, logits, labels, mask):
         return jax_utils.cross_entropy_loss_and_accuracy(logits, labels, mask)
