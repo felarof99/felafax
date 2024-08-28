@@ -60,11 +60,12 @@ class Checkpointer(object):
         self.checkpoint_dir = checkpoint_dir
         self.enable_checkpointer = enable_checkpointer
 
-    def save_checkpoint_simple(self, params, filename):
+    def save_checkpoint_simple(self, train_state, filename):
         path = os.path.join(self.checkpoint_dir, filename)
         with utils.open_file(path, "wb") as fout:
             fout.write(
-                flax.serialization.msgpack_serialize(params, in_place=True))
+                flax.serialization.msgpack_serialize(
+                    train_state.params["params"], in_place=True))
 
     def save_checkpoint(self, train_state, filename, gather_fns=None):
         if self.enable_checkpointer:

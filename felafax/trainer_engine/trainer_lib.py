@@ -255,7 +255,7 @@ class CausalLMTrainer(FelafaxTrainer):
 
     def save_checkpoint(self, state, path):
         print(f"Saving checkpoint to {path}...")
-        self.checkpointer.save_checkpoint_simple(params=state.params,
+        self.checkpointer.save_checkpoint_simple(train_state=state,
                                                  filename=path)
         print(f"Checkpoint saved to {path}.")
 
@@ -268,14 +268,17 @@ class CausalLMTrainer(FelafaxTrainer):
         return cross_entropy_loss_and_accuracy(logits, labels, mask)
 
     def save_hf_compatible_checkpoint(self, model_params, save_path):
-        # model_params shouldn't have params as a key under it.
         print(f"Saving HuggingFace-compatible checkpoint to {save_path}...")
         os.makedirs(save_path, exist_ok=True)
         tmp_model_path = os.path.join(save_path, "tmp")
         os.makedirs(tmp_model_path, exist_ok=True)
 
+        # Use shard_fns to properly flatten the model_params
+        gathered_params = checkpoint_lib.tree_apply(self.gather_fns,
+                                                    model_params)
+        flax_params = flax.traverse_util.flatten_dict(gathered_params, sep='.')
+
         # Convert Flax params to PyTorch
-        flax_params = flax.traverse_util.flatten_dict(model_params, sep='.')
         torch_params = {}
         for key, tensor in flax_params.items():
             if isinstance(tensor, (bool, int, float)):
