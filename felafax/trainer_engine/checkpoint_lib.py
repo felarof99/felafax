@@ -1,3 +1,4 @@
+"""Checkpoints JAX models efficiently, will replace with Orbax soon!"""
 import os
 
 import flax

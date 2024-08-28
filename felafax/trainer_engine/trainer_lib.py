@@ -230,8 +230,8 @@ class CausalLMTrainer(FelafaxTrainer):
         num_batches = 0
 
         for eval_batch in eval_dataloader:
-            eval_batch = jax.device_put(
-                eval_batch, NamedSharding(self.mesh, PS(("dp", "fsdp"))))
+            eval_batch = jax.device_put(eval_batch,
+                                        NamedSharding(self.mesh, PS()))
 
             if run_jitted:
                 metrics = self.jitted_eval_step(state, eval_batch)
