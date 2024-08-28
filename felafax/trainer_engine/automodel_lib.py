@@ -1,3 +1,4 @@
+import os
 from typing import Tuple, Union, Dict
 
 from huggingface_hub import snapshot_download
@@ -13,6 +14,7 @@ MODEL_NAME_TO_DOWNLOAD_CONFIG = {
     "llama-3.1-8B-JAX": {
         "hf_model_name": "meta-llama/Meta-Llama-3.1-8B",
         "felafax_model_name": "felafax/llama-3.1-8B-JAX",
+        "chkpt_filename": "llama3.1_8b_serialized.flax",
     },
 }
 
@@ -52,6 +54,8 @@ class AutoJAXModelForCausalLM:
             repo_id=download_config["felafax_model_name"],
             token=huggingface_token,
         )
+        model_path = os.path.join(model_path,
+                                  download_config["chkpt_filename"])
 
         print(f"{model_name} was downloaded to {model_path}.")
 
