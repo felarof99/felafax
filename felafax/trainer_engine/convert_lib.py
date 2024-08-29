@@ -19,6 +19,11 @@ from felafax.trainer_engine import checkpoint_lib
 def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
 
     def match_keywords(string, positives, negatives):
+        """
+        Helper function to match keywords in a string.
+            
+        Returns: True if all positive keywords are present and no negative keywords are present
+        """
         for positive in positives:
             if positive not in string:
                 return False
@@ -36,26 +41,52 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
             json.dump(text, f)
 
     def permute(w, n_heads, input_dim, output_dim):
-        # permute for sliced rotary embedding
+        """
+        Helper function to permute weight matrices for sliced rotary embedding.
+        
+        Args:
+        w: Input weight matrix
+        n_heads: Number of attention heads
+        input_dim: Input dimension
+        output_dim: Output dimension
+        
+        Returns: Permuted weight matrix
+        """
         return w.view(n_heads, output_dim // n_heads // 2, 2,
                       input_dim).transpose(1,
                                            2).reshape(output_dim, input_dim)
 
     def load_and_convert_checkpoint(path):
+        """
+        Load a Flax checkpoint and convert it to PyTorch format.
+        
+        1. Load the Flax checkpoint
+        2. Flatten the parameter dictionary
+        3. Convert Flax tensors to PyTorch tensors
+        4. Transpose weight matrices for certain layers
+        """
         _, flax_params = checkpoint_lib.Checkpointer.load_trainstate_checkpoint(
             path)
-        # flax_params = flax_params['params']  # TODO(ntnsonti): why is this shit required.
         flax_params = flatten_dict(flax_params['params'], sep='.')
         torch_params = {}
         for key, tensor in flax_params.items():
             if match_keywords(key, ["kernel"], ["norm", 'ln_f']):
-                tensor = tensor.T
+                tensor = tensor.T  # Transpose weight matrices for linear layers
             torch_params[key] = torch.tensor(
                 checkpoint_lib.float_tensor_to_dtype(tensor, 'fp32'),
                 dtype=torch.float16)
         return torch_params
 
     def write_model(loaded, model_path, llama_pretrained_config):
+        """
+        Write the converted model to disk in HuggingFace format.
+        
+        1. Create necessary directories
+        2. Set up model configuration
+        3. Iterate through layers, converting and saving parameters
+        4. Save model configuration and metadata
+        5. Load the saved model to verify and finalize the conversion
+        """
         os.makedirs(model_path, exist_ok=True)
         tmp_model_path = os.path.join(model_path, "tmp")
         os.makedirs(tmp_model_path, exist_ok=True)
@@ -75,6 +106,7 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
         for layer_i in range(n_layers):
             filename = f"pytorch_model-{layer_i + 1}-of-{n_layers + 1}.bin"
             state_dict = {
+                # Convert attention weights
                 f"model.layers.{layer_i}.self_attn.q_proj.weight":
                 permute(
                     loaded[f"transformer.h.{layer_i}.attention.wq.kernel"],
@@ -107,6 +139,7 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
                 loaded[f"transformer.h.{layer_i}.ffn_norm.kernel"],
             }
 
+            # Save rotary embedding parameters
             state_dict[
                 f"model.layers.{layer_i}.self_attn.rotary_emb.inv_freq"] = inv_freq
             for k, v in state_dict.items():
@@ -114,6 +147,7 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
                 param_count += v.numel()
             torch.save(state_dict, os.path.join(tmp_model_path, filename))
 
+        # Save non-layer-specific parameters (embeddings, final norm, and LM head)
         filename = f"pytorch_model-{n_layers + 1}-of-{n_layers + 1}.bin"
         # Unsharded
         state_dict = {
@@ -152,6 +186,7 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
         del loaded
         gc.collect()
 
+        # Load the saved model to verify and finalize the conversion
         print("Loading the checkpoint in a Llama model.")
         model = LlamaForCausalLM.from_pretrained(tmp_model_path,
                                                  torch_dtype=torch.float16)
