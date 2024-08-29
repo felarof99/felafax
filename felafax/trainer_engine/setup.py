@@ -1,8 +1,8 @@
 """Sets up the environment for the training and provides utility functions."""
 
+import importlib
 import os
 import sys
-import importlib
 
 
 def setup_environment():
@@ -34,10 +34,11 @@ def clear_cache():
 
 def reload_modules():
     clear_cache()
+    import felafax
     import felafax.trainer_engine
     modules_to_reload = [
         module for name, module in sys.modules.items()
-        if name.startswith('felafax.trainer_engine')
+        if name.startswith('felafax')
     ]
     for module in modules_to_reload:
         try:
@@ -46,7 +47,7 @@ def reload_modules():
             print(
                 f"Warning: Could not reload module {module.__name__}. Error: {e}"
             )
-    print("Attempted to reload all felafax.trainer_engine modules")
+    print("Reloaded all felafax modules.")
 
 
 def main():
