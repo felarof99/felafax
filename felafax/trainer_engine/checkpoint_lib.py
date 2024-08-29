@@ -68,19 +68,18 @@ class Checkpointer(object):
                     train_state.params["params"], in_place=True))
 
     @staticmethod
-    def load_flax_checkpoint(path, target=None, shard_fns=None):
+    def _load_flax_checkpoint(path, param_shapes=None, shard_fns=None):
         """Load a standard flax checkpoint that's not saved with the
         msgpack streaming format.
 
         Args:
             path (str): Path to the checkpoint file.
-            target (Any, optional): Template object to restore the state into.
+            param_shapes (Any, optional): Template object to restore the state into.
             shard_fns (dict, optional): Functions to apply to each shard of the loaded state.
 
         Returns:
             The loaded and potentially reshaped state dictionary.
         """
-        # Read the encoded checkpoint data
         with utils.open_file(path) as fin:
             encoded_bytes = fin.read()
 
@@ -92,61 +91,53 @@ class Checkpointer(object):
             shard_fns = to_state_dict(shard_fns)
             state_dict = tree_apply(shard_fns, state_dict)
 
-        # If no target is provided, return the state dictionary as is
-        if target is None:
+        if param_shapes is None:
             return state_dict
-        # Otherwise, restore the state into the provided target structure
-        return from_state_dict(target, state_dict)
+
+        # Restore the state into the provided param_shapes structure
+        return from_state_dict(param_shapes, state_dict)
 
     @classmethod
     def load_trainstate_checkpoint(
         cls,
         load_from,
-        trainstate_target=None,
-        trainstate_shard_fns=None,
-        disallow_trainstate=False,
+        state_shapes=None,
+        shard_fns=None,
     ):
         """
         Load a checkpoint for the training state.
 
         Args:
             load_from (str): String specifying the checkpoint type and path.
-            trainstate_target (Any, optional): Template of the expected training state structure.
-            trainstate_shard_fns (dict, optional): Functions to reshape the loaded state.
-            disallow_trainstate (bool): If True, prevents loading full training state.
+            state_shapes (Any, optional): Template of the expected training state structure.
+            shard_fns (dict, optional): Functions to reshape the loaded state.
 
         Returns:
             tuple: (train_state, restored_params)
         """
-        # Extract the parameters target from the trainstate_target if provided
-        if trainstate_target is not None:
-            params_target = trainstate_target.params["params"]
+        # Extract the parameters param_shapes from the state_shapes if provided
+        if state_shapes is not None:
+            param_shapes = state_shapes.params["params"]
         else:
-            params_target = None
+            param_shapes = None
 
         # Extract the parameter shard functions if provided
-        if trainstate_shard_fns is not None:
-            params_shard_fns = trainstate_shard_fns.params["params"]
+        if shard_fns is not None:
+            params_shard_fns = shard_fns.params["params"]
         else:
             params_shard_fns = None
 
         # Split the load_from string into type and path
         load_type, load_path = load_from.split("::", 1)
 
-        # Check if loading full trainstate is allowed
-        if disallow_trainstate:
-            assert load_type != "trainstate", "Loading full trainstate is not allowed!"
-
         train_state = None
         restored_params = None
 
-        # Handle different checkpoint types
-        if load_type == "flax_serialized":
-            # Load the params in the standard flax format (non-streaming)
-            # This requires the entire params to fit in memory
-            restored_params = cls.load_flax_checkpoint(
+        if load_type == "flax_params":
+            # Load parameters in standard flax format (non-streaming)
+            restored_params = cls._load_flax_checkpoint(
                 path=load_path,
-                target=params_target,
+                param_shapes=param_shapes,
                 shard_fns=params_shard_fns)
             restored_params = {"params": restored_params}
         else:
