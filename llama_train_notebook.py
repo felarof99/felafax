@@ -43,13 +43,14 @@ MODEL_NAME = "Meta-Llama-3.1-8B"
 
 # Constants for paths
 FELAFAX_DIR = os.path.dirname(os.path.dirname(felafax.__file__))
+GCS_DIR = "/home/felafax-storage/"
 EXPORT_DIR = os.path.join(FELAFAX_DIR, "export")
-HF_COMPATIBLE_EXPORT_DIR = os.path.join(FELAFAX_DIR, "hf_export")
+HF_COMPATIBLE_EXPORT_DIR = os.path.join(GCS_DIR, "hf_export")
 HF_REPO_ID = "felarof01/test_checkpoint"
 
 # Ensure directories exist
-os.makedirs(EXPORT_DIR, exist_ok=True)
-os.makedirs(HF_COMPATIBLE_EXPORT_DIR, exist_ok=True)
+utils.makedirs(EXPORT_DIR, exist_ok=True)
+utils.makedirs(HF_COMPATIBLE_EXPORT_DIR, exist_ok=True)
 
 model_path, model, model_configurator, tokenizer = automodel_lib.AutoJAXModelForCausalLM.from_pretrained(
     "llama-3.1-8B-JAX", HUGGINGFACE_TOKEN)
@@ -176,10 +177,10 @@ trainer = trainer_lib.CausalLMTrainer(
     mesh=jax_utils.MESH,
 )
 
-state = trainer.train(train_dataloader, val_dataloader, run_jitted=True)
+# state = trainer.train(train_dataloader, val_dataloader, run_jitted=True)
 
 export_path = os.path.join(EXPORT_DIR, "llama3.flax")
-trainer.save_checkpoint(state, path=export_path)
+# trainer.save_checkpoint(state, path=export_path)
 
 convert_lib.save_hf_compatible_checkpoint(f'flax_params::{export_path}',
                                           HF_COMPATIBLE_EXPORT_DIR,
