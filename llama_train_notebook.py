@@ -58,13 +58,13 @@ MODEL_NAME = "Meta-Llama-3.1-8B"
 
 # Constants for paths
 FELAFAX_DIR = os.path.dirname(os.path.dirname(felafax.__file__))
-CHECKPOINT_DIR = os.path.join(FELAFAX_DIR, "checkpoints")
-HF_COMPATIBLE_DIR = os.path.join(FELAFAX_DIR, "hf_compatible")
+EXPORT_DIR = os.path.join(FELAFAX_DIR, "export")
+HF_COMPATIBLE_EXPORT_DIR = os.path.join(FELAFAX_DIR, "hf_export")
 HF_REPO_ID = "felarof01/test_checkpoint"
 
 # Ensure directories exist
-os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-os.makedirs(HF_COMPATIBLE_DIR, exist_ok=True)
+os.makedirs(EXPORT_DIR, exist_ok=True)
+os.makedirs(HF_COMPATIBLE_EXPORT_DIR, exist_ok=True)
 
 # In[7]:
 
@@ -214,16 +214,16 @@ state = trainer.train(train_dataloader, val_dataloader, run_jitted=True)
 
 # In[ ]:
 
-checkpoint_path = os.path.join(CHECKPOINT_DIR, "llama3.flax")
-trainer.save_checkpoint(state, path=checkpoint_path)
+export_path = os.path.join(EXPORT_DIR, "llama3.flax")
+trainer.save_checkpoint(state, path=export_path)
 
 # In[ ]:
 
-convert_lib.save_hf_compatible_checkpoint(f'flax_params::{checkpoint_path}',
-                                          HF_COMPATIBLE_DIR,
+convert_lib.save_hf_compatible_checkpoint(f'flax_params::{export_path}',
+                                          HF_COMPATIBLE_EXPORT_DIR,
                                           model_configurator)
 
 # In[ ]:
 
-convert_lib.upload_checkpoint_to_hf(HF_COMPATIBLE_DIR, HF_REPO_ID,
-                                    HUGGINGFACE_TOKEN)
+# convert_lib.upload_checkpoint_to_hf(HF_COMPATIBLE_EXPORT_DIR, HF_REPO_ID,
+#                                     HUGGINGFACE_TOKEN)
