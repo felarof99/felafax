@@ -1,5 +1,7 @@
 .vscode/*
 **/.ipynb_checkpoints/*
+export/
+hf_export/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

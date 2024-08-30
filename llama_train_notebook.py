@@ -177,10 +177,10 @@ trainer = trainer_lib.CausalLMTrainer(
     mesh=jax_utils.MESH,
 )
 
-# state = trainer.train(train_dataloader, val_dataloader, run_jitted=True)
+state = trainer.train(train_dataloader, val_dataloader, run_jitted=True)
 
 export_path = os.path.join(EXPORT_DIR, "llama3.flax")
-# trainer.save_checkpoint(state, path=export_path)
+trainer.save_checkpoint(state, path=export_path)
 
 convert_lib.save_hf_compatible_checkpoint(f'flax_params::{export_path}',
                                           HF_COMPATIBLE_EXPORT_DIR,
