@@ -70,6 +70,21 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
         flax_params = flatten_dict(flax_params['params'], sep='.')
         torch_params = {}
         for key, tensor in flax_params.items():
+            # Transpose linear layer weights to match PyTorch's dimension order
+            #
+            # Flax/JAX and PyTorch handle linear layer weights differently:
+            # - Flax/JAX: weights shape is (in_features, out_features)
+            #   Matrix multiplication: output = input @ weight
+            # - PyTorch: weights shape is (out_features, in_features)
+            #   Matrix multiplication: output = weight @ input
+            #
+            # Example:
+            # For a linear layer with 768 input features and 3072 output features:
+            # - Flax weight shape: (768, 3072)
+            # - PyTorch weight shape: (3072, 768)
+            #
+            # By transposing the weights during conversion, we ensure that
+            # the converted PyTorch model produces the same outputs as the original Flax model.
             if match_keywords(key, ["kernel"], ["norm", 'ln_f']):
                 tensor = tensor.T  # Transpose weight matrices for linear layers
             torch_params[key] = torch.tensor(
@@ -197,8 +212,7 @@ def save_hf_compatible_checkpoint(load_path, out_dir, model_configurator):
         model.save_pretrained(model_path)
         shutil.rmtree(tmp_model_path)
 
-    loaded_params = load_and_convert_checkpoint(
-        'flax_params::/home/ckpt/llama3.flax')
+    loaded_params = load_and_convert_checkpoint(load_path)
     write_model(
         loaded_params,
         model_path=out_dir,
