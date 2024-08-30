@@ -1,3 +1,4 @@
+import os
 from ml_collections import ConfigDict
 import cloudpickle as pickle
 from copy import deepcopy
@@ -58,9 +59,9 @@ def flatten_config_dict(config: ConfigDict, prefix=None):
 def open_file(path, mode="rb", cache_type="readahead"):
     if path.startswith("gs://"):
         raise NotImplementedError("GCS is not implemented yet.")
-        # import gcsfs
-        # logging.getLogger("fsspec").setLevel(logging.WARNING)
-        # return gcsfs.GCSFileSystem().open(path, mode, cache_type=cache_type)
+        import gcsfs
+        logging.getLogger("fsspec").setLevel(logging.WARNING)
+        return gcsfs.GCSFileSystem().open(path, mode, cache_type=cache_type)
     else:
         return open(path, mode)
 
@@ -68,8 +69,8 @@ def open_file(path, mode="rb", cache_type="readahead"):
 def makedirs(path, exist_ok=True):
     if path.startswith("gs://"):
         raise NotImplementedError("GCS is not implemented yet.")
-        # import gcsfs
-        # return gcsfs.GCSFileSystem().makedirs(path, exist_ok=exist_ok)
+        import gcsfs
+        return gcsfs.GCSFileSystem().makedirs(path, exist_ok=exist_ok)
     else:
         return os.makedirs(path, exist_ok=exist_ok)
 

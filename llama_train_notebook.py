@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
 import os
 import sys
 import importlib
@@ -16,13 +14,9 @@ try:
 except ImportError as e:
     print(f"Error importing felafax: {e}")
 
-# In[2]:
-
 from felafax.trainer_engine import setup
 
 setup.setup_environment()
-
-# In[3]:
 
 from felafax.trainer_engine import utils, jax_utils
 from felafax.trainer_engine import automodel_lib, checkpoint_lib, trainer_lib, convert_lib
@@ -30,28 +24,19 @@ from felafax import llama_config
 
 setup.reload_modules()
 
-# In[4]:
-
 from typing import (Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union)
-
 import jax
 import jax.numpy as jnp
 import chex
 import optax
-
 import torch
-
 from datasets import load_dataset
 from transformers import default_data_collator
-
-# In[5]:
 
 HUGGINGFACE_USERNAME = input(
     "INPUT: Please provide your HUGGINGFACE_USERNAME: ") or "felarof01"
 HUGGINGFACE_TOKEN = input("INPUT: Please provide your HUGGINGFACE_TOKEN: "
                           ) or "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"
-
-# In[6]:
 
 # Select a supported model from above list to use!
 MODEL_NAME = "Meta-Llama-3.1-8B"
@@ -66,14 +51,8 @@ HF_REPO_ID = "felarof01/test_checkpoint"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(HF_COMPATIBLE_EXPORT_DIR, exist_ok=True)
 
-# In[7]:
-
 model_path, model, model_configurator, tokenizer = automodel_lib.AutoJAXModelForCausalLM.from_pretrained(
     "llama-3.1-8B-JAX", HUGGINGFACE_TOKEN)
-
-# # Will just use the same dataset pipeline for now
-
-# In[8]:
 
 
 def get_dataset(*, tokenizer, batch_size=1, seq_length=32, max_examples=None):
@@ -152,9 +131,6 @@ def get_dataset(*, tokenizer, batch_size=1, seq_length=32, max_examples=None):
     return train_dataloader, test_dataloader
 
 
-# In[ ]:
-
-
 def test_dataset_pipeline(tokenizer):
     """Print shapes of first batch to verify dataset pipeline."""
     train_loader, _ = get_dataset(tokenizer=tokenizer,
@@ -167,10 +143,6 @@ def test_dataset_pipeline(tokenizer):
 
 
 test_dataset_pipeline(tokenizer)
-
-# # Training loop
-
-# In[ ]:
 
 
 @chex.dataclass(frozen=True)
@@ -188,16 +160,12 @@ class TrainingConfig:
 training_cfg = TrainingConfig()
 optimizer = optax.sgd(training_cfg.learning_rate)
 
-# In[ ]:
-
 # Prepare dataset
 train_dataloader, val_dataloader = get_dataset(
     tokenizer=tokenizer,
     seq_length=training_cfg.seq_length,
     max_examples=training_cfg.dataset_size_limit,
 )
-
-# In[ ]:
 
 trainer = trainer_lib.CausalLMTrainer(
     model=model,
@@ -208,22 +176,13 @@ trainer = trainer_lib.CausalLMTrainer(
     mesh=jax_utils.MESH,
 )
 
-# In[ ]:
-
 state = trainer.train(train_dataloader, val_dataloader, run_jitted=True)
-
-# In[ ]:
 
 export_path = os.path.join(EXPORT_DIR, "llama3.flax")
 trainer.save_checkpoint(state, path=export_path)
-
-# In[ ]:
 
 convert_lib.save_hf_compatible_checkpoint(f'flax_params::{export_path}',
                                           HF_COMPATIBLE_EXPORT_DIR,
                                           model_configurator)
 
-# In[ ]:
-
-# convert_lib.upload_checkpoint_to_hf(HF_COMPATIBLE_EXPORT_DIR, HF_REPO_ID,
-#                                     HUGGINGFACE_TOKEN)
+# convert_lib.upload_checkpoint_to_hf(HF_COMPATIBLE_EXPORT_DIR, HF_REPO_ID, HUGGINGFACE_TOKEN)
